@@ -14,6 +14,7 @@
     --muted:#7A6A5C;
   }
   *{box-sizing:border-box}
+  html{overflow-x:hidden}
   html,body{margin:0;padding:0}
   body{
     background:var(--paper);
@@ -95,7 +96,22 @@
   .sub .q{font-size:17px;font-weight:700;margin:10px 0 6px}
 
   .hint{background:#FBF6EC;border-left:5px solid var(--broth);padding:12px 14px;border-radius:0 10px 10px 0;font-size:16px}
-  .done{text-align:center;padding:20px 0}
+  .done{text-align:center;padding:14px 0 2px}
+  .done .msg{font-size:17px;color:var(--muted);margin:8px 0 0}
+  .big{width:100%;min-height:66px;border-radius:12px;border:2px solid var(--scallion);background:var(--scallion);
+       color:#fff;font-family:inherit;font-size:21px;font-weight:800;cursor:pointer}
+  .ghost{width:100%;min-height:52px;border-radius:11px;border:2px solid var(--line);background:#fff;
+       color:var(--ink);font-family:inherit;font-size:17px;font-weight:700;cursor:pointer;margin:6px 0}
+  .quiet{display:block;margin:22px auto 0;background:none;border:0;color:var(--muted);font-family:inherit;
+       font-size:15px;text-decoration:underline;cursor:pointer;padding:10px}
+  details{margin:12px 0}
+  details summary{cursor:pointer;font-size:17px;font-weight:700;padding:12px 2px;list-style:none}
+  details summary::-webkit-details-marker{display:none}
+  details summary::before{content:"▸ ";color:var(--broth)}
+  details[open] summary::before{content:"▾ "}
+  .peek{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;
+        font-size:15px;line-height:1.6;color:var(--muted);white-space:pre-wrap;
+        word-break:break-word;overflow-wrap:anywhere;max-height:340px;overflow:auto}
   .done .stamp{display:inline-block;border:3px solid var(--chili);color:var(--chili);border-radius:12px;
     padding:8px 20px;font-size:22px;font-weight:800;letter-spacing:.2em;transform:rotate(-4deg);margin-bottom:14px}
   .file{display:block;margin:10px 0;font-size:16px;color:var(--muted)}
@@ -430,46 +446,78 @@ function download(name, text, type){
 }
 
 function renderDone(){
-  let unfilled = 0;
-  DATA.cats.forEach(c => DATA.groups.forEach(g => { if (!(A.cat[c.name]||{})[g.id]) unfilled++; }));
+  let unfilled = 0, doneCats = 0;
+  DATA.cats.forEach(c => {
+    let miss = 0;
+    DATA.groups.forEach(g => { if (!(A.cat[c.name]||{})[g.id]) miss++; });
+    unfilled += miss;
+    if (!miss) doneCats++;
+  });
+  const all = unfilled === 0;
+
   view.insertAdjacentHTML("beforeend", `
-    <div class="done"><div class="stamp">填寫完成</div></div>
-    ${unfilled ? `<div class="hint">還有 ${unfilled} 題沒選，可以按「上一頁」回去補；先傳出來也可以，我們再一起看。</div>` : ""}
-    <div class="card"><h3>把結果傳回來</h3>
-      <p class="egs">按下面存成檔案，用 LINE 或 email 傳回來就好。若還要再改，之後從第一頁「接續上次的進度」讀回這個檔案。</p>
-    </div>`);
-  const card = document.createElement("div");
-  card.className = "card";
-  [["存成檔案（傳這個給我們）", () => download("文章牛肉湯_選項確認_" + new Date().toISOString().slice(0,10) + ".json",
+    <div class="done">
+      <div class="stamp">${all ? "填寫完成" : "還沒填完"}</div>
+      <p class="msg">${doneCats} / ${DATA.cats.length} 類已填完${all ? "" : "，還有 " + unfilled + " 題沒選"}</p>
+    </div>
+    ${all ? "" : `<div class="hint">按「上一頁」可以回去補。先傳回來也沒關係，我們一起看剩下的。</div>`}`);
+
+  /* 主要動作：只有一顆 */
+  const main = document.createElement("div");
+  main.className = "card";
+  main.innerHTML = `<h3>傳回來給我們</h3><p class="egs">按一下複製，貼到 LINE 傳過來就完成了。</p>`;
+  const big = document.createElement("button");
+  big.className = "big";
+  big.textContent = "複製文字，貼到 LINE";
+  big.onclick = () => {
+    const t = summary();
+    const showBox = () => {
+      const box = document.getElementById("copybox");
+      const ta = document.getElementById("copytext");
+      ta.value = t; box.style.display = "flex"; ta.focus(); ta.select();
+    };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(t).then(() => alert("已複製，貼到 LINE 傳給我們就好。"), showBox);
+    } else showBox();
+  };
+  main.appendChild(big);
+  view.appendChild(main);
+
+  /* 次要動作收起來 */
+  const other = document.createElement("details");
+  other.innerHTML = "<summary>用檔案傳（LINE 貼不上時再用）</summary>";
+  const box = document.createElement("div");
+  [["存成檔案，傳這個給我們", () => download("文章牛肉湯_選項確認_" + new Date().toISOString().slice(0,10) + ".json",
       JSON.stringify({shop:"文章牛肉湯", filledAt:new Date().toISOString(), answers:A, summary:summary()}, null, 2))],
-   ["存成文字檔（自己留存）", () => download("文章牛肉湯_選項確認.txt", summary(), "text/plain;charset=utf-8")],
-   ["複製文字，貼到 LINE", () => {
-      const t = summary();
-      const showBox = () => {
-        const box = document.getElementById("copybox");
-        const ta = document.getElementById("copytext");
-        ta.value = t; box.style.display = "flex"; ta.focus(); ta.select();
-      };
-      if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(t).then(() => alert("已複製，貼到 LINE 傳給我們就好。"), showBox);
-      } else showBox();
-   }],
-   ["清除全部重填", () => {
-      if (confirm("確定要清掉全部答案、從頭重填嗎？")) {
-        try { localStorage.removeItem(KEY); } catch(e){}
-        location.reload();
-      }
-   }]].forEach(([label, fn]) => {
-      const b = document.createElement("button");
-      b.className = "btn next"; b.style.width = "100%"; b.style.margin = "8px 0";
-      b.textContent = label; b.onclick = fn;
-      card.appendChild(b);
-   });
-  view.appendChild(card);
+   ["存成文字檔，自己留一份", () => download("文章牛肉湯_選項確認.txt", summary(), "text/plain;charset=utf-8")]
+  ].forEach(([label, fn]) => {
+    const b = document.createElement("button");
+    b.className = "ghost"; b.textContent = label; b.onclick = fn;
+    box.appendChild(b);
+  });
+  other.appendChild(box);
+  view.appendChild(other);
+
+  /* 預覽收起來，且不顯示系統短碼那兩行 */
+  const peek = document.createElement("details");
+  peek.innerHTML = "<summary>看一下我填了什麼</summary>";
   const pre = document.createElement("div");
-  pre.className = "card";
-  pre.innerHTML = `<h3>填寫內容預覽</h3><pre style="white-space:pre-wrap;font-family:inherit;font-size:16px;color:var(--muted);margin:0">${esc(summary())}</pre>`;
-  view.appendChild(pre);
+  pre.className = "peek";
+  pre.textContent = summary().split("（下面這行是系統用的")[0].trim();
+  peek.appendChild(pre);
+  view.appendChild(peek);
+
+  /* 危險動作：小、安靜、離主要按鈕遠 */
+  const reset = document.createElement("button");
+  reset.className = "quiet";
+  reset.textContent = "清掉全部答案，從頭重填";
+  reset.onclick = () => {
+    if (confirm("確定要清掉全部答案、從頭重填嗎？")) {
+      try { localStorage.removeItem(KEY); } catch(e){}
+      location.reload();
+    }
+  };
+  view.appendChild(reset);
 }
 
 document.getElementById("next").onclick = () => { if (step < steps.length - 1) { step++; save(); render(); } };
